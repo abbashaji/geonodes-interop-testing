@@ -4,15 +4,25 @@ Maps to: geonodes_export_interop_gap.md source #6 (issue #95102), follow-up
 to fbx_export__materials -- does per-instance MATERIAL VARIATION (not just
 one shared material) survive Realize Instances + FBX export?
 
-Ad-hoc interactive session against a live Blender instance via a connector
-(same approach as prior entries' v4 scripts) -- this file is the
-consolidated, verified-working scaffold for reuse via
-`blender --background --python <this_file>` or by pasting into a connected
-session's scripting console.
+Updated for headless CI use (GitHub Actions, Blender 5.2 LTS):
+- Original version was written for a live MCP-connected session and never
+  exited Blender explicitly, which hangs a `--python` invocation until the
+  runner's job timeout.
+- This version calls sys.exit(0) on success / sys.exit(1) on failure so the
+  process terminates cleanly and the CI step reports pass/fail correctly.
+
+Run with:
+  ./blender/blender --background --python fbx_export__multi_material_realized_v1.py
+(FBX operators were not confirmed to require a window/screen context in this
+project's harness notes -- try --background first. If it errors with a
+"context is incorrect" message, fall back to:
+  xvfb-run -a ./blender/blender --python fbx_export__multi_material_realized_v1.py
+)
 """
 
 import bpy
 import os
+import sys
 import tempfile
 import json
 
@@ -42,7 +52,8 @@ def log_version_stamp():
 
 def reset_scene_manually():
     # Never call bpy.ops.wm.read_factory_settings() in a live connector
-    # session -- see HARNESS NOTES. Manual teardown instead.
+    # session -- see HARNESS NOTES. Manual teardown instead. Harmless (and
+    # unnecessary but safe) in a fresh --background process too.
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for m in list(bpy.data.meshes):
@@ -199,7 +210,8 @@ def main():
         report(stamp, CONFIG, results)
     except Exception as e:
         report(stamp, CONFIG, {}, crashed=True, crash_detail=str(e))
-        raise
+        sys.exit(1)  # non-zero exit -> CI step shows as failed
+    sys.exit(0)      # clean exit -> no hanging GUI under --background/xvfb
 
 
 if __name__ == "__main__":
