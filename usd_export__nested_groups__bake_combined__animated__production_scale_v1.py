@@ -143,13 +143,12 @@ def build_outer_scene(baked_obj):
     links.new(n_setpos.outputs["Geometry"], n_output.inputs["Geometry"])
 
     # --- Trigger the outer-level bake ---
+    # Note: the GeometryNodeBake node itself has no `bake_id` attribute in
+    # this Blender version -- only modifier.bakes[i] does. Since this node
+    # group has exactly one Bake node, modifier.bakes[0] is unambiguous.
     bpy.context.view_layer.update()
-    bake_cfg = None
-    for b in mod.bakes:
-        if b.bake_id == n_bake.bake_id:
-            bake_cfg = b
-            break
-    assert bake_cfg is not None, "modifier.bakes did not populate for the outer Bake node"
+    assert len(mod.bakes) == 1, f"expected exactly 1 bake entry on the modifier, got {len(mod.bakes)}"
+    bake_cfg = mod.bakes[0]
     bake_cfg.directory = "/tmp/outer_bake_cache_prod_scale"
 
     bpy.context.view_layer.objects.active = obj
