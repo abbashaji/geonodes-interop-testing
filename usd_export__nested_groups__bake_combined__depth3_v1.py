@@ -186,16 +186,28 @@ def build_outer_bake_chain(points_obj, proto_obj):
 
 
 def trigger_bake(obj, mod, bake_node, bake_dir):
-    bake_node.bake_target = "DISK"
-    bake_node.bake_settings.directory = bake_dir
+    bpy.context.view_layer.update()
+
+    if len(mod.bakes) == 0:
+        raise RuntimeError(
+            f"modifier.bakes is empty after wiring the Bake node "
+            f"(node.bake_id={getattr(bake_node, 'bake_id', 'N/A')}) -- "
+            f"expected one entry to appear once the node group is assigned"
+        )
+    bake_cfg = mod.bakes[0]
+    bake_cfg.directory = bake_dir
+    if hasattr(bake_cfg, "bake_target"):
+        bake_cfg.bake_target = "DISK"
+    elif hasattr(bake_cfg, "use_custom_path"):
+        bake_cfg.use_custom_path = True
 
     bpy.context.view_layer.objects.active = obj
     result = bpy.ops.object.geometry_node_bake_single(
         session_uid=obj.session_uid,
         modifier_name=mod.name,
-        bake_id=bake_node.bake_id if hasattr(bake_node, "bake_id") else 0,
+        bake_id=bake_cfg.bake_id,
     )
-    return {"operator_result": str(result)}
+    return {"operator_result": str(result), "directory": bake_cfg.directory}
 
 
 def export_and_inspect(obj, out_path):
