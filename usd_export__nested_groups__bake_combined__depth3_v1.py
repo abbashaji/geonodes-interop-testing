@@ -164,6 +164,8 @@ def build_outer_bake_chain(points_obj, proto_obj):
     inst1_out, obj_info1 = wire_instance_chain(group, in_node.outputs["Geometry"], None, proto_obj)
 
     bake_node = group.nodes.new("GeometryNodeBake")
+    if len(bake_node.bake_items) == 0:
+        bake_node.bake_items.new(socket_type="GEOMETRY", name="Geometry")
     group.links.new(inst1_out, bake_node.inputs["Geometry"])
 
     inst2points = group.nodes.new("GeometryNodeInstancesToPoints")
