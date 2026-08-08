@@ -188,7 +188,16 @@ def animate_offset(group, setpos_node):
     offset_input.keyframe_insert(data_path="default_value", frame=CONFIG["end_frame"])
 
     action = group.animation_data.action if group.animation_data else None
-    return {"action_present": action is not None, "fcurve_count": len(action.fcurves) if action else 0}
+    fcurve_count = None
+    if action is not None:
+        try:
+            fcurve_count = len(action.fcurves)
+        except AttributeError:
+            # Blender 5.x layered Action system: fcurves aren't directly
+            # under action.fcurves -- see HARNESS NOTES. Diagnostic only,
+            # not load-bearing for the actual assertions.
+            fcurve_count = "unavailable (layered Action API)"
+    return {"action_present": action is not None, "fcurve_count": fcurve_count}
 
 
 def trigger_bake(obj, mod, bake_node, bake_dir):
