@@ -194,8 +194,9 @@ def trigger_bake(obj, mod, bake_node, bake_dir):
             f"(node.bake_id={getattr(bake_node, 'bake_id', 'N/A')}) -- "
             f"expected one entry to appear once the node group is assigned"
         )
+    import os
     bake_cfg = mod.bakes[0]
-    bake_cfg.directory = bake_dir
+    bake_cfg.directory = os.path.abspath(bake_dir)
     if hasattr(bake_cfg, "bake_target"):
         bake_cfg.bake_target = "DISK"
     elif hasattr(bake_cfg, "use_custom_path"):
@@ -214,7 +215,12 @@ def export_and_inspect(obj, out_path):
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    bpy.ops.wm.usd_export(filepath=out_path, selected_objects_only=True, export_animation=False)
+    bpy.ops.wm.usd_export(
+        filepath=out_path,
+        selected_objects_only=True,
+        export_animation=False,
+        use_instancing=True,
+    )
 
     from pxr import Usd, UsdGeom
 
