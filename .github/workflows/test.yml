@@ -15,7 +15,7 @@ jobs:
         id: bg_attempt
         continue-on-error: true
         run: |
-          ./blender/blender --background --python usd_export__points__bake_combined__extreme_scale_v1.py 2>&1 | tee output.log
+          ./blender/blender --background --python usd_export__points__bake_combined__extreme_scale_1M_8M_v1.py 2>&1 | tee output.log
       # --- Fallback: only runs if the background attempt failed, e.g. with
       # a "context is incorrect" error from operators that need a window ---
       - name: Install xvfb + Blender runtime deps (fallback only)
@@ -26,7 +26,7 @@ jobs:
       - name: Run test script (xvfb fallback)
         if: steps.bg_attempt.outcome == 'failure'
         run: |
-          xvfb-run -a ./blender/blender --python usd_export__points__bake_combined__extreme_scale_v1.py 2>&1 | tee output.log
+          xvfb-run -a ./blender/blender --python usd_export__points__bake_combined__extreme_scale_1M_8M_v1.py 2>&1 | tee output.log
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
