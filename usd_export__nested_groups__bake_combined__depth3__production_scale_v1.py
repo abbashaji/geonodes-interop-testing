@@ -212,12 +212,20 @@ def trigger_bake(obj, mod, bake_node, bake_dir):
             f"modifier.bakes is empty after wiring the Bake node "
             f"(node.bake_id={getattr(bake_node, 'bake_id', 'N/A')})"
         )
+    # NOTE (HARNESS NOTES): bake_cfg.directory (the per-bake-item field) is
+    # NOT sufficient to route to disk -- Blender logs "Bake directory ...
+    # is empty, setting default path" / "Cannot determine bake location on
+    # disk. Falling back to packed bake." and silently packs instead, even
+    # though bake_cfg.directory looks set. The field that actually routes
+    # the bake to disk is the MODIFIER-level mod.bake_directory (matching
+    # every other production-scale bake cell in this pipeline), not the
+    # per-bake-item bake_cfg.directory used by the ORIGINAL small-scale
+    # depth3 script -- that script's disk-bake was therefore likely never
+    # actually verified either (it also never checked meta_dir_exists).
+    os.makedirs(os.path.abspath(bake_dir), exist_ok=True)
+    mod.bake_target = "DISK"
+    mod.bake_directory = os.path.abspath(bake_dir)
     bake_cfg = mod.bakes[0]
-    bake_cfg.directory = os.path.abspath(bake_dir)
-    if hasattr(bake_cfg, "bake_target"):
-        bake_cfg.bake_target = "DISK"
-    elif hasattr(bake_cfg, "use_custom_path"):
-        bake_cfg.use_custom_path = True
 
     bpy.context.view_layer.objects.active = obj
     obj.select_set(True)
