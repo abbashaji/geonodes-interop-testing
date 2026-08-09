@@ -5,7 +5,7 @@ on:
       script_path:
         description: 'Path (relative to repo root) to the Blender test script to run'
         required: true
-        default: 'geonodes-interop-correctness/scripts/alembic_export__curves__basic_v1.py'
+        default: 'geonodes-interop-correctness/scripts/alembic_export__curves__basic_v2.py'
 jobs:
   run-tests:
     runs-on: ubuntu-latest
