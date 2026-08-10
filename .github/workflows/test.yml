@@ -1,38 +1,44 @@
 name: blender-5.2-tests
+
 on:
   workflow_dispatch:
     inputs:
-      script_path:
-        description: 'Path (relative to repo root) to the Blender test script to run'
+      script:
+        description: 'Test script filename to run (must exist in repo root)'
         required: true
-        default: 'geonodes-interop-correctness/scripts/alembic_export__curves__basic_v3.py'
+
 jobs:
   run-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Download Blender 5.2.0
         run: |
           curl -L -o blender.tar.xz https://download.blender.org/release/Blender5.2/blender-5.2.0-linux-x64.tar.xz
           tar -xf blender.tar.xz
           mv blender-5.2.0-linux-x64 blender
+
       # --- Attempt 1: plain --background (no GPU/display needed at all) ---
       - name: Run test script (background mode)
         id: bg_attempt
         continue-on-error: true
         run: |
-          ./blender/blender --background --python "${{ github.event.inputs.script_path }}" 2>&1 | tee output.log
+          ./blender/blender --background --python "${{ inputs.script }}" 2>&1 | tee output.log
+
       # --- Fallback: only runs if the background attempt failed, e.g. with
-      # a "context is incorrect" error from operators that need a window ---
+      # a "context is incorrect" error from the FBX operators ---
       - name: Install xvfb + Blender runtime deps (fallback only)
         if: steps.bg_attempt.outcome == 'failure'
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libxi6 libxrender1 libxrandr2 libxfixes3 libxkbcommon0 libgl1
+
       - name: Run test script (xvfb fallback)
         if: steps.bg_attempt.outcome == 'failure'
         run: |
-          xvfb-run -a ./blender/blender --python "${{ github.event.inputs.script_path }}" 2>&1 | tee output.log
+          xvfb-run -a ./blender/blender --python "${{ inputs.script }}" 2>&1 | tee output.log
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,8 +46,6 @@ jobs:
           name: test-results
           path: |
             *.fbx
-            *.usdc
-            *.abc
             *.json
             *.log
             output.log
