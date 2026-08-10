@@ -101,14 +101,19 @@ def build_scene():
     instance_1 = nodes.new("GeometryNodeInstanceOnPoints")
     links.new(mesh_to_points.outputs["Points"], instance_1.inputs["Points"])
     links.new(proto_info.outputs["Geometry"], instance_1.inputs["Instance"])
+    instance_1.inputs["Instance"].default_value = None  # linked above
 
     bake = nodes.new("GeometryNodeBake")
     bake.bake_items.clear()
     bake.bake_items.new("GEOMETRY", "Geometry")
-    bake.bake_mode = "STILL"
-    if hasattr(bake, "bake_target"):
-        bake.bake_target = "DISK"
     links.new(instance_1.outputs["Instances"], bake.inputs["Geometry"])
+    # bake_mode/bake_target live on the modifier's bake entry, not the node
+    # itself -- see harness note "GeometryNodeBake node has no bake_mode/
+    # bake_target attrs".
+    bake_entry = next(b for b in mod.bakes if b.bake_id == bake.bake_id)
+    bake_entry.bake_mode = "STILL"
+    bake_entry.bake_target = "DISK"
+    bake_entry.directory = "/tmp/gn_bake_cache_scale_fix_v2"
 
     instances_to_points = nodes.new("GeometryNodeInstancesToPoints")
     links.new(bake.outputs["Geometry"], instances_to_points.inputs["Instances"])
