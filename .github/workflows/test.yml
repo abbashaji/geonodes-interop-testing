@@ -39,6 +39,18 @@ jobs:
         run: |
           xvfb-run -a ./blender/blender --python "${{ inputs.script }}" 2>&1 | tee output.log
 
+      # --- Produce a token-optimized twin of output.log for pulling back
+      # via the github_get_artifact_text tool. Never modifies or replaces
+      # output.log itself -- output_condensed.txt is a second, separate
+      # file. Only known exporter-warning boilerplate before the
+      # "=== VERSION STAMP ===" marker is dropped; everything from that
+      # marker onward (ground truth lines, the CELL RESULT JSON) is never
+      # touched. See .github/scripts/condense_log.py for the full rules.
+      - name: Condense log for retrieval
+        if: always()
+        run: |
+          python3 .github/scripts/condense_log.py output.log || cp output.log output_condensed.txt
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,3 +61,4 @@ jobs:
             *.json
             *.log
             output.log
+            output_condensed.txt
