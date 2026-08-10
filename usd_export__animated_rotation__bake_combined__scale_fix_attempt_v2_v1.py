@@ -101,7 +101,6 @@ def build_scene():
     instance_1 = nodes.new("GeometryNodeInstanceOnPoints")
     links.new(mesh_to_points.outputs["Points"], instance_1.inputs["Points"])
     links.new(proto_info.outputs["Geometry"], instance_1.inputs["Instance"])
-    instance_1.inputs["Instance"].default_value = None  # linked above
 
     bake = nodes.new("GeometryNodeBake")
     bake.bake_items.clear()
