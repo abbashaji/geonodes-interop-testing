@@ -1,0 +1,10 @@
+{
+  "run_id": 31586241045,
+  "job_status": "success",
+  "script": "usd_export__bake_combined__prototype_reference_isolation_small_scale_v2.py",
+  "blender_version": "5.2.0",
+  "duration_seconds": 31,
+  "watchdog_killed": false,
+  "crashed": false,
+  "finished_at": "2026-08-12T10:11:08Z"
+}
