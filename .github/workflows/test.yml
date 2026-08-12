@@ -6,6 +6,10 @@ on:
       script:
         description: 'Test script filename to run (must exist in repo root)'
         required: true
+      blender_version:
+        description: 'Full Blender version to test against, e.g. 5.2.0 or 5.0.1. Defaults to 5.2.0 (this pipeline''s standard version) if omitted.'
+        required: false
+        default: '5.2.0'
 
 jobs:
   run-tests:
@@ -13,11 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Blender 5.2.0
+      - name: Download Blender
         run: |
-          curl -L -o blender.tar.xz https://download.blender.org/release/Blender5.2/blender-5.2.0-linux-x64.tar.xz
+          FULL_VERSION="${{ inputs.blender_version }}"
+          MAJOR_MINOR=$(echo "$FULL_VERSION" | cut -d. -f1,2)
+          URL="https://download.blender.org/release/Blender${MAJOR_MINOR}/blender-${FULL_VERSION}-linux-x64.tar.xz"
+          echo "Downloading Blender $FULL_VERSION from $URL"
+          curl -L -o blender.tar.xz "$URL"
           tar -xf blender.tar.xz
-          mv blender-5.2.0-linux-x64 blender
+          mv blender-${FULL_VERSION}-linux-x64 blender
 
       # --- Attempt 1: plain --background (no GPU/display needed at all) ---
       - name: Run test script (background mode)
