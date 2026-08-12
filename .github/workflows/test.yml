@@ -14,11 +14,15 @@ on:
         description: 'Skip the --background attempt entirely and force headful (xvfb) mode, for isolating headless-vs-headful as a variable. Defaults to false (normal background-first behavior).'
         required: false
         default: 'false'
+      timeout_minutes:
+        description: 'Hard job timeout in minutes. Raise this for known-heavy scripts (e.g. large instance counts); default covers normal isolation cells with margin for a hung crash (see KB harness note).'
+        required: false
+        default: '10'
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     steps:
       - uses: actions/checkout@v4
 
