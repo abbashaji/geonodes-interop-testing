@@ -10,6 +10,10 @@ on:
         description: 'Full Blender version to test against, e.g. 5.2.0 or 5.0.1. Defaults to 5.2.0 (this pipeline''s standard version) if omitted.'
         required: false
         default: '5.2.0'
+      force_xvfb:
+        description: 'Skip the --background attempt entirely and force headful (xvfb) mode, for isolating headless-vs-headful as a variable. Defaults to false (normal background-first behavior).'
+        required: false
+        default: 'false'
 
 jobs:
   run-tests:
@@ -28,24 +32,36 @@ jobs:
           mv blender-${FULL_VERSION}-linux-x64 blender
 
       # --- Attempt 1: plain --background (no GPU/display needed at all) ---
+      # Skipped entirely when force_xvfb=true. A mode marker is written into
+      # output.log so retrieval never has to guess which path actually ran
+      # (this was previously ambiguous -- both paths used a plain `tee`,
+      # so the fallback would silently overwrite any trace of attempt 1).
       - name: Run test script (background mode)
         id: bg_attempt
+        if: inputs.force_xvfb != 'true'
         continue-on-error: true
         run: |
-          ./blender/blender --background --python "${{ inputs.script }}" 2>&1 | tee output.log
+          echo "=== EXECUTION MODE: background (--background) ===" > output.log
+          ./blender/blender --background --python "${{ inputs.script }}" 2>&1 | tee -a output.log
 
-      # --- Fallback: only runs if the background attempt failed, e.g. with
-      # a "context is incorrect" error from the FBX operators ---
-      - name: Install xvfb + Blender runtime deps (fallback only)
-        if: steps.bg_attempt.outcome == 'failure'
+      # --- Fallback: runs if the background attempt failed (e.g. a "context
+      # is incorrect" error from operators needing a window/screen), OR if
+      # force_xvfb=true was explicitly requested to isolate headful mode. ---
+      - name: Install xvfb + Blender runtime deps (fallback/forced)
+        if: steps.bg_attempt.outcome == 'failure' || inputs.force_xvfb == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libxi6 libxrender1 libxrandr2 libxfixes3 libxkbcommon0 libgl1
 
-      - name: Run test script (xvfb fallback)
-        if: steps.bg_attempt.outcome == 'failure'
+      - name: Run test script (xvfb)
+        if: steps.bg_attempt.outcome == 'failure' || inputs.force_xvfb == 'true'
         run: |
-          xvfb-run -a ./blender/blender --python "${{ inputs.script }}" 2>&1 | tee output.log
+          if [ "${{ inputs.force_xvfb }}" = "true" ]; then
+            echo "=== EXECUTION MODE: xvfb (forced, background attempt skipped) ===" > output.log
+          else
+            echo "=== EXECUTION MODE: xvfb (fallback after background attempt failed) ===" >> output.log
+          fi
+          xvfb-run -a ./blender/blender --python "${{ inputs.script }}" 2>&1 | tee -a output.log
 
       # --- Produce a token-optimized twin of output.log for pulling back
       # via the github_get_artifact_text tool. Never modifies or replaces
@@ -53,7 +69,9 @@ jobs:
       # file. Only known exporter-warning boilerplate before the
       # "=== VERSION STAMP ===" marker is dropped; everything from that
       # marker onward (ground truth lines, the CELL RESULT JSON) is never
-      # touched. See .github/scripts/condense_log.py for the full rules.
+      # touched. The new EXECUTION MODE marker line is always before that
+      # point and is explicitly preserved regardless. See
+      # .github/scripts/condense_log.py for the full rules.
       - name: Condense log for retrieval
         if: always()
         run: |
