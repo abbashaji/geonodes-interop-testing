@@ -19,12 +19,18 @@ on:
         required: false
         default: '60'
 
+permissions:
+  contents: write   # needed so the final step can commit status/latest.json
+
 jobs:
   run-tests:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Record start time
+        run: echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Download Blender
         run: |
@@ -101,3 +107,42 @@ jobs:
             *.log
             output.log
             output_condensed.txt
+
+      # --- Event-based completion signal. Writes a tiny status file and
+      # commits it, so a waiting agent can do ONE self-contained poll of
+      # this raw file (no auth, no Actions-API rate limit, no repeated
+      # LLM turns) instead of repeatedly querying run status. Whoever
+      # triggered this run should check this file's run_id against the
+      # one they dispatched -- see KB harness note on event-based waiting.
+      - name: Write status signal
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$(( END_TIME - START_TIME ))
+
+          WATCHDOG_KILLED=false
+          if grep -q "WATCHDOG KILL" output.log 2>/dev/null; then WATCHDOG_KILLED=true; fi
+
+          CRASHED=false
+          if grep -q '"crashed":true' output.log 2>/dev/null; then CRASHED=true; fi
+
+          mkdir -p status
+          cat > status/latest.json << EOF
+          {
+            "run_id": ${{ github.run_id }},
+            "job_status": "${{ job.status }}",
+            "script": "${{ inputs.script }}",
+            "blender_version": "${{ inputs.blender_version }}",
+            "duration_seconds": $DURATION,
+            "watchdog_killed": $WATCHDOG_KILLED,
+            "crashed": $CRASHED,
+            "finished_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add status/latest.json
+          git commit -m "status: run ${{ github.run_id }} finished [skip ci]" || echo "Nothing to commit"
+          git pull --rebase origin main || true
+          git push origin HEAD:main || echo "Push failed -- status file not updated, waiter falls back to API polling"
