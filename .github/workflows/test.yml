@@ -15,9 +15,9 @@ on:
         required: false
         default: 'false'
       timeout_minutes:
-        description: 'Hard job timeout in minutes. Raise this for known-heavy scripts (e.g. large instance counts); default covers normal isolation cells with margin for a hung crash (see KB harness note).'
+        description: 'Outer job timeout in minutes -- a last-resort backstop only. The real hang detection is the CPU-idle watchdog (kills within ~90s of true idle, no matter how long the job has been running); this cap exists in case the watchdog itself is somehow bypassed. Safe to leave high even for heavy tests.'
         required: false
-        default: '10'
+        default: '60'
 
 jobs:
   run-tests:
@@ -32,7 +32,7 @@ jobs:
           MAJOR_MINOR=$(echo "$FULL_VERSION" | cut -d. -f1,2)
           URL="https://download.blender.org/release/Blender${MAJOR_MINOR}/blender-${FULL_VERSION}-linux-x64.tar.xz"
           echo "Downloading Blender $FULL_VERSION from $URL"
-          curl -L -o blender.tar.xz "$URL"
+          curl -L --max-time 300 -o blender.tar.xz "$URL"
           tar -xf blender.tar.xz
           mv blender-${FULL_VERSION}-linux-x64 blender
 
@@ -41,13 +41,19 @@ jobs:
       # output.log so retrieval never has to guess which path actually ran
       # (this was previously ambiguous -- both paths used a plain `tee`,
       # so the fallback would silently overwrite any trace of attempt 1).
+      #
+      # Wrapped in cpu_watchdog_run.sh: kills the process only if runner
+      # CPU has been genuinely idle for a sustained window (see script
+      # for tunables), not on a fixed wall-clock timeout. A crash that
+      # doesn't quit Blender (KB harness note) gets caught in ~90-100s;
+      # a heavy-but-working test is left alone no matter how long it runs.
       - name: Run test script (background mode)
         id: bg_attempt
         if: inputs.force_xvfb != 'true'
         continue-on-error: true
         run: |
           echo "=== EXECUTION MODE: background (--background) ===" > output.log
-          ./blender/blender --background --python "${{ inputs.script }}" 2>&1 | tee -a output.log
+          bash .github/scripts/cpu_watchdog_run.sh ./blender/blender --background --python "${{ inputs.script }}" 2>&1 | tee -a output.log
 
       # --- Fallback: runs if the background attempt failed (e.g. a "context
       # is incorrect" error from operators needing a window/screen), OR if
@@ -58,6 +64,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libxi6 libxrender1 libxrandr2 libxfixes3 libxkbcommon0 libgl1
 
+      # Also watchdog-wrapped -- xvfb-run's own child (blender) is caught
+      # by the process-group kill in cpu_watchdog_run.sh, same as above.
       - name: Run test script (xvfb)
         if: steps.bg_attempt.outcome == 'failure' || inputs.force_xvfb == 'true'
         run: |
@@ -66,7 +74,7 @@ jobs:
           else
             echo "=== EXECUTION MODE: xvfb (fallback after background attempt failed) ===" >> output.log
           fi
-          xvfb-run -a ./blender/blender --python "${{ inputs.script }}" 2>&1 | tee -a output.log
+          bash .github/scripts/cpu_watchdog_run.sh xvfb-run -a ./blender/blender --python "${{ inputs.script }}" 2>&1 | tee -a output.log
 
       # --- Produce a token-optimized twin of output.log for pulling back
       # via the github_get_artifact_text tool. Never modifies or replaces
