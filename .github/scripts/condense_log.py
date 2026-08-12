@@ -59,6 +59,13 @@ NOISE_RE = [re.compile(p) for p in NOISE_DROP_PATTERNS]
 
 PROTECT_START_RE = re.compile(r"^===\s*VERSION STAMP\s*===")
 
+# Leading "HH:MM.mmm" Blender log timestamp. Stripped only to build a
+# de-dup key for ALWAYS_KEEP lines -- the timestamp itself is never lost,
+# since the first occurrence of a repeated message is kept verbatim (with
+# its own timestamp) and the last-seen timestamp is reported alongside
+# the repeat count.
+TIMESTAMP_RE = re.compile(r"^\d{2}:\d{2}\.\d{3}\s+")
+
 
 def _is_always_keep(line):
     low = line.lower()
@@ -67,6 +74,45 @@ def _is_always_keep(line):
 
 def _is_noise(line):
     return any(p.search(line) for p in NOISE_RE)
+
+
+def _dedup_key(line):
+    """Normalize an always-keep line to a repetition key by stripping only
+    the leading timestamp. Two lines share a key only if everything else
+    (subsystem tag, error text, path) matches exactly -- so a genuinely
+    different error (e.g. a different broken prototype path) is never
+    merged with this one, only true repeats of the identical message."""
+    return TIMESTAMP_RE.sub("", line, count=1)
+
+
+def _collapse_repeats(keep_lines):
+    """Collapse consecutive runs of identical (post-timestamp-strip)
+    always-keep lines into one representative line plus a note giving
+    the repeat count and the timestamp of the last occurrence. No
+    message content is ever dropped -- distinct messages each still get
+    their own representative line; this only removes duplicate copies
+    of a message already shown once. Returns (lines, error_repeats)."""
+    out = []
+    collapsed = 0
+    i, n = 0, len(keep_lines)
+    while i < n:
+        line = keep_lines[i]
+        key = _dedup_key(line)
+        j = i + 1
+        while j < n and _dedup_key(keep_lines[j]) == key:
+            j += 1
+        run_len = j - i
+        out.append(line)
+        if run_len > 1:
+            ts_match = TIMESTAMP_RE.match(keep_lines[j - 1])
+            last_ts = ts_match.group(0).strip() if ts_match else "?"
+            out.append(
+                f"    ... [{run_len - 1} more identical repeat(s) of the "
+                f"line above, last at {last_ts}]"
+            )
+            collapsed += run_len - 1
+        i = j
+    return out, collapsed
 
 
 def condense(raw_text):
@@ -78,18 +124,38 @@ def condense(raw_text):
     n = len(lines)
 
     out = []
+    keep_buffer = []  # consecutive unprotected always-keep lines, pending collapse
     blank_run = 0
     noise_dropped = 0
+    error_repeats_collapsed = 0
     protected = False
+
+    def _flush_keep_buffer():
+        nonlocal error_repeats_collapsed
+        if keep_buffer:
+            collapsed_lines, n_collapsed = _collapse_repeats(keep_buffer)
+            out.extend(collapsed_lines)
+            error_repeats_collapsed += n_collapsed
+            keep_buffer.clear()
 
     for line in lines:
         stripped = line.strip()
         if not protected and PROTECT_START_RE.match(stripped):
             protected = True
+            _flush_keep_buffer()
 
         if not protected and _is_noise(line) and not _is_always_keep(line):
             noise_dropped += 1
             continue
+
+        # Buffer unprotected always-keep lines so consecutive repeats of
+        # the identical message can be collapsed (see _collapse_repeats).
+        # Everything else flushes the buffer first, so collapsing only
+        # ever merges genuinely adjacent, identical always-keep lines.
+        if not protected and _is_always_keep(line):
+            keep_buffer.append(line)
+            continue
+        _flush_keep_buffer()
 
         if stripped == "" and not protected:
             blank_run += 1
@@ -100,6 +166,8 @@ def condense(raw_text):
 
         out.append(line)
 
+    _flush_keep_buffer()
+
     condensed_text = "\n".join(out)
     stats = {
         "original_lines": n,
@@ -107,6 +175,7 @@ def condense(raw_text):
         "original_bytes": len(raw_text.encode("utf-8", errors="ignore")),
         "condensed_bytes": len(condensed_text.encode("utf-8", errors="ignore")),
         "noise_lines_dropped": noise_dropped,
+        "error_repeats_collapsed": error_repeats_collapsed,
     }
     return condensed_text, stats
 
@@ -125,7 +194,9 @@ def condense_file(raw_log_path, condensed_out_path, raw_log_display_path=None):
         f"[condense_log] {stats['original_lines']} lines / "
         f"{stats['original_bytes']} bytes -> {stats['condensed_lines']} lines / "
         f"{stats['condensed_bytes']} bytes ({pct:.0f}% smaller). "
-        f"{stats['noise_lines_dropped']} boilerplate line(s) dropped. "
+        f"{stats['noise_lines_dropped']} boilerplate line(s) dropped, "
+        f"{stats['error_repeats_collapsed']} repeated error line(s) collapsed "
+        f"(message text preserved, only exact duplicates merged). "
         f"Nothing from '=== VERSION STAMP ===' onward was touched.\n"
         f"Full raw log: {raw_log_display_path or raw_log_path}\n"
     )
