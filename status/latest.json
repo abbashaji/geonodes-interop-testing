@@ -1,10 +1,10 @@
 {
-  "run_id": 31750601053,
+  "run_id": 31750770361,
   "job_status": "success",
-  "script": "omniverse_roundtrip__bake_combined_v1.py",
+  "script": "omniverse_roundtrip__bake_combined_v2.py",
   "blender_version": "5.2.0",
-  "duration_seconds": 30,
+  "duration_seconds": 31,
   "watchdog_killed": false,
-  "crashed": true,
-  "finished_at": "2026-08-13T22:36:31Z"
+  "crashed": false,
+  "finished_at": "2026-08-13T22:39:06Z"
 }
