@@ -1,10 +1,10 @@
 {
-  "run_id": 31682258301,
+  "run_id": 31682603366,
   "job_status": "success",
-  "script": "usd_export__bake_combined__prototype_reference_isolation_small_scale_v3.py",
+  "script": "usd_export__bake_combined__prototype_reference_isolation_small_scale_v4.py",
   "blender_version": "5.2.0",
-  "duration_seconds": 147,
+  "duration_seconds": 141,
   "watchdog_killed": true,
-  "crashed": true,
-  "finished_at": "2026-08-13T08:31:43Z"
+  "crashed": false,
+  "finished_at": "2026-08-13T08:36:11Z"
 }
